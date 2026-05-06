@@ -1,0 +1,14 @@
+Zenodo 77GHz Fine-tuned Model
+Before: acc=2.6%  F1=0.0697
+After : acc=95.7%   F1=0.6938
+
+              precision    recall  f1-score   support
+
+       Drone       1.00      0.95      0.98       272
+    Aircraft       0.00      0.00      0.00         0
+        Bird       0.75      0.97      0.85        34
+     Clutter       0.93      0.98      0.95        42
+
+    accuracy                           0.96       348
+   macro avg       0.67      0.72      0.69       348
+weighted avg       0.97      0.96      0.96       348

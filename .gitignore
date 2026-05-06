@@ -1,0 +1,60 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+venv/
+.venv/
+ENV/
+env/
+
+# ── Jupyter ────────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.tmp
+
+# ── Large data files (too big for git, regenerate with test_zenodo.py) ────────
+data/real/zenodo_77ghz/
+data/real/mafat/
+data/synthetic/
+data/processed/
+data/raw/
+
+# Upload samples are small — keep them
+!data/real/upload_samples/
+data/real/upload_samples/*.npy
+
+# ── Trained model weights (large binaries) ────────────────────────────────────
+# Commit best_model.pt and best_model_zenodo.pt if under 100 MB
+# GitHub hard limit is 100 MB. Our models: 17 MB + 4 MB = OK to commit.
+# Exclude only the duplicate final_model.pt
+outputs/models/final_model.pt
+
+# ── Logs and plots — keep them (small, useful for reviewers) ──────────────────
+# outputs/logs/ is committed as-is
+
+# ── Temporary files ───────────────────────────────────────────────────────────
+*.log
+*.tmp
+plan_final.txt
+
+# ── Keep empty directory structure ────────────────────────────────────────────
+!.gitkeep

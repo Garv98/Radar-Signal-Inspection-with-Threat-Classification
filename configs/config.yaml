@@ -1,0 +1,143 @@
+# Radar Threat Classifier Configuration
+
+# Paths
+paths:
+  data_raw: "data/raw"
+  data_real: "data/real"
+  data_processed: "data/processed"
+  data_synthetic: "data/synthetic"
+  models: "outputs/models"
+  logs: "outputs/logs"
+
+# Data Source Policy
+data_policy:
+  real_only: false
+  allow_synthetic_fallback: true
+  required_real_datasets: []
+
+# Dataset Configuration
+dataset:
+  source: "synthetic"
+  primary_real_dataset: "mafat"
+  classes:
+    - "Drone"
+    - "Aircraft"
+    - "Bird"
+    - "Clutter"
+    - "Noise"
+  num_classes: 5
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  random_seed: 42
+  mafat:
+    map_humans_to: "Drone"
+    include_auxiliary: true
+
+# Radar Signal Parameters
+radar:
+  carrier_frequency: 24.0e9  # 24 GHz (typical for drone detection)
+  sampling_rate: 10000       # Hz
+  prf: 1000                  # Pulse Repetition Frequency (Hz)
+  num_pulses: 32             # Number of pulses per CPI
+  num_samples: 128           # Samples per pulse
+
+# Preprocessing Parameters
+preprocessing:
+  fft_size: 128
+  window_type: "hann"
+  overlap: 0.5
+  normalize_method: "minmax"  # Options: minmax, zscore
+  denoise_method: "wavelet"   # Options: wavelet, median, gaussian
+
+# Feature Extraction
+features:
+  use_spectrogram: true
+  use_doppler_sequence: true
+  use_environmental: true
+  spectrogram_size: [32, 128]  # [time_bins, freq_bins]
+  doppler_sequence_length: 32
+  environmental_features:
+    - "rain"        # mm/hr
+    - "temperature" # Celsius
+    - "pressure"    # hPa
+
+# Model Architecture
+model:
+  name: "RadarClassifier"
+  cnn:
+    channels: [32, 64, 128]
+    kernel_size: 3
+    pool_size: 2
+  lstm:
+    input_size: 1
+    hidden_size: 64
+    num_layers: 2
+    bidirectional: true
+  env_feature_dim: 3
+  env_hidden_size: 16
+  fc_hidden: 256
+  dropout: 0.35
+
+# Training Configuration
+training:
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  scheduler:
+    type: "cosine"  # Options: cosine, step, plateau
+    warmup_epochs: 5
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+  class_weights: "balanced"  # Options: balanced, null, or list of weights
+
+# Data Augmentation
+augmentation:
+  enabled: true
+  time_shift: 0.1         # Max shift as fraction of signal length
+  frequency_shift: 0.05   # Max shift as fraction of bandwidth
+  noise_injection: 0.1    # SNR for added noise
+  amplitude_scale: [0.8, 1.2]
+
+# Synthetic Data Generation
+synthetic:
+  num_samples_per_class: 2000
+  aircraft:
+    jet_types: ["f16", "f22_stealth", "su27", "commercial", "turboprop"]
+    velocity_range: [120, 800]  # m/s  (covers subsonic to Mach 2.3+)
+    rcs_range: [0.0001, 120]    # m^2  (stealth to large transport)
+  drone:
+    velocity_range: [0, 30]     # m/s
+    rotor_frequencies: [50, 200]  # Hz
+    num_rotors: [3, 4, 6]
+  bird:
+    velocity_range: [5, 25]     # m/s
+    wingbeat_frequencies: [2, 15]  # Hz
+
+# Evaluation
+evaluation:
+  metrics:
+    - "accuracy"
+    - "f1_macro"
+    - "f1_weighted"
+    - "confusion_matrix"
+  target_accuracy: 0.85
+  target_f1: 0.80
+
+# Inference Trust Policy
+inference:
+  use_confidence_scaled_threat: true
+  class_confidence_thresholds:
+    Drone: 0.80
+    Aircraft: 0.75
+    Bird: 0.60
+    Clutter: 0.55
+    Noise: 0.50
+
+# Hardware
+hardware:
+  device: "auto"  # Options: auto, cuda, cpu
+  num_workers: 0
+  pin_memory: false

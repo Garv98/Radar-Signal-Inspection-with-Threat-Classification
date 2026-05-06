@@ -1,0 +1,14 @@
+Test Accuracy : 98.60%
+Test F1-macro : 0.9859
+
+              precision    recall  f1-score   support
+
+       Drone       0.96      1.00      0.98       300
+    Aircraft       0.99      0.94      0.96       300
+        Bird       0.98      0.99      0.99       300
+     Clutter       1.00      1.00      1.00       301
+       Noise       0.99      1.00      1.00       300
+
+    accuracy                           0.99      1501
+   macro avg       0.99      0.99      0.99      1501
+weighted avg       0.99      0.99      0.99      1501
