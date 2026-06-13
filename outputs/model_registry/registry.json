@@ -1,0 +1,63 @@
+{
+  "models": {
+    "radar_rl_gatekeeper": {
+      "versions": [
+        {
+          "version": "v1",
+          "model_path": "outputs\\models\\gatekeeper_dqn.pt",
+          "metrics": {
+            "forward_rate": 0.7995833333333333,
+            "workload_reduction": 0.2004166666666667,
+            "f1": 0.36712939695950036,
+            "recall": 0.9913677536231884,
+            "miss_rate": 0.008632246376811595,
+            "avg_reward": -0.8388428607048622,
+            "accuracy": 0.3804166666666667
+          },
+          "config": {
+            "reward": {
+              "compute_cost": 0.35,
+              "miss_aversion": 3.0,
+              "certainty_blend": 0.5,
+              "value_gamma": 0.5,
+              "value_clip": [
+                0.1,
+                3.0
+              ],
+              "threat_classes": [
+                "Drone",
+                "Aircraft"
+              ],
+              "threat_value": 1.5,
+              "nonthreat_value": 0.25,
+              "forward_budget": null,
+              "budget_penalty": 1.0
+            },
+            "agent": {
+              "lr": 0.0005,
+              "gamma": 0.0,
+              "eps_start": 1.0,
+              "eps_end": 0.02,
+              "eps_decay": 0.997,
+              "batch_size": 64,
+              "target_update": 250,
+              "tau": 1.0,
+              "grad_clip": 10.0,
+              "buffer_capacity": 20000,
+              "per_alpha": 0.6,
+              "per_beta_start": 0.4,
+              "per_beta_frames": 80000
+            }
+          },
+          "tags": {
+            "type": "rl_gatekeeper",
+            "teacher": "best_model_zenodo.pt"
+          },
+          "registered_at": "2026-06-01T08:02:36.960031",
+          "stage": "staging"
+        }
+      ]
+    }
+  },
+  "production": null
+}

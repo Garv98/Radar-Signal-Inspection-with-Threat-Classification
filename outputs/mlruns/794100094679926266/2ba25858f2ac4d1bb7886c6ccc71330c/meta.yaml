@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/garva/OneDrive/Desktop/IDP/outputs/mlruns/794100094679926266/2ba25858f2ac4d1bb7886c6ccc71330c/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '794100094679926266'
+lifecycle_stage: active
+run_id: 2ba25858f2ac4d1bb7886c6ccc71330c
+run_name: gatekeeper_20260601_215829
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1780331309635
+status: 1
+tags: []
+user_id: garva

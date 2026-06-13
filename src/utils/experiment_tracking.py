@@ -65,16 +65,37 @@ class ExperimentTracker:
             self._setup_local()
 
     def _setup_mlflow(self):
-        """Configure MLflow tracking."""
+        """Configure MLflow tracking, self-healing a malformed experiment dir."""
+        import shutil
         mlflow.set_tracking_uri(self.tracking_uri)
-        mlflow.set_experiment(self.experiment_name)
+        try:
+            mlflow.set_experiment(self.experiment_name)
+        except Exception as e:
+            # A name-based folder without meta.yaml (e.g. left by a previous
+            # local-fallback run) breaks MLflow's experiment scan. Clean it and retry.
+            bad = Path(self.tracking_uri) / self.experiment_name
+            try:
+                if bad.exists() and not (bad / 'meta.yaml').exists():
+                    shutil.rmtree(bad, ignore_errors=True)
+                    logger.warning(f"Removed malformed MLflow experiment dir: {bad}")
+                mlflow.set_experiment(self.experiment_name)
+            except Exception as e2:
+                logger.warning(f"MLflow unavailable ({e2}); using local tracking fallback.")
+                self.use_mlflow = False
+                self._setup_local()
+                return
 
         logger.info(f"MLflow tracking configured: {self.tracking_uri}")
         logger.info(f"Experiment: {self.experiment_name}")
 
     def _setup_local(self):
-        """Configure local tracking fallback."""
-        self.local_dir = Path(self.tracking_uri) / self.experiment_name
+        """Configure local tracking fallback (kept OUT of the MLflow store)."""
+        base = Path(self.tracking_uri)
+        # Never write the local fallback into an MLflow file store (dir named
+        # 'mlruns' or already containing MLflow metadata) -- that pollutes it.
+        if base.name == "mlruns" or (base / "models").exists():
+            base = base.parent / "local_runs"
+        self.local_dir = base / self.experiment_name
         self.local_dir.mkdir(parents=True, exist_ok=True)
 
         self.run_id = datetime.now().strftime('%Y%m%d_%H%M%S')

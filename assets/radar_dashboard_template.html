@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>RL Gatekeeper · Radar Inspector · 77 GHz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cyan:#28e0ff; --ink:#05070f; --panel:rgba(8,16,34,.72); --edge:#13325c;
+    --txt:#cfe0ff; --sub:#5f7fbf; --ok:#2ee6a6; --warn:#ff9f1c; --bad:#ff3b3b;
+    --drone:#ff3b3b; --aircraft:#ff9f1c; --bird:#2ee6a6; --clutter:#3da5ff; --noise:#8892a6;
+  }
+  *{box-sizing:border-box;margin:0;}
+  body{height:100vh;overflow:hidden;background:var(--ink);color:var(--txt);
+    font-family:'Share Tech Mono',monospace;}
+  #scene{position:fixed;inset:0;z-index:0;}
+  .ui{position:fixed;z-index:2;}
+  h1,h2,h3,.orb{font-family:'Orbitron',sans-serif;}
+  /* header */
+  #hdr{top:0;left:0;right:0;height:74px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 26px;background:linear-gradient(180deg,rgba(6,12,28,.9),rgba(6,12,28,0));z-index:3;}
+  #hdr .title{font-family:'Orbitron';font-weight:900;font-size:22px;letter-spacing:3px;color:var(--cyan);
+    text-shadow:0 0 22px rgba(40,224,255,.7);}
+  .chips{display:flex;gap:10px;}
+  .chip{border:1px solid var(--edge);border-radius:8px;padding:6px 12px;font-size:10px;letter-spacing:1px;
+    background:rgba(8,16,34,.6);}
+  .chip b{display:block;font-family:'Orbitron';font-size:11px;}
+  .chip.on{border-color:var(--ok);} .chip.on b{color:var(--ok);}
+  .chip.zen{border-color:var(--warn);} .chip.zen b{color:var(--warn);}
+  /* step dots */
+  #dots{top:84px;left:50%;transform:translateX(-50%);display:flex;gap:8px;}
+  .dot{width:10px;height:10px;border-radius:50%;background:#1a2c50;transition:all .3s;}
+  /* panels */
+  .panel{background:var(--panel);backdrop-filter:blur(13px);border:1px solid var(--edge);
+    border-radius:14px;padding:12px 15px;box-shadow:0 8px 36px rgba(0,0,0,.55);margin-bottom:11px;width:300px;}
+  .panel h3{font-size:12px;letter-spacing:2px;color:var(--cyan);text-transform:uppercase;margin-bottom:9px;
+    display:flex;align-items:center;gap:7px;}
+  .panel h3:before{content:'';width:9px;height:9px;background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
+  #left,#right{top:86px;bottom:120px;display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:none;}
+  #left::-webkit-scrollbar,#right::-webkit-scrollbar{width:0;height:0;}
+  #left{left:16px;} #right{right:16px;}
+  #left .panel,#right .panel{flex:0 0 auto;}
+  .row{display:flex;justify-content:space-between;font-size:13px;margin:7px 0;}
+  .row .k{color:var(--sub);} .row .v{font-family:'Orbitron';font-weight:700;}
+  .barlab{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin:8px 0 3px;}
+  .bar{height:9px;border-radius:5px;background:#0b1430;overflow:hidden;}
+  .bar>i{display:block;height:100%;border-radius:5px;width:0%;transition:width .5s cubic-bezier(.2,.9,.2,1);}
+  select,button{width:100%;font-family:'Share Tech Mono';border-radius:9px;cursor:pointer;}
+  select{background:#0b1430;color:var(--txt);border:1px solid var(--edge);padding:9px;margin:6px 0 12px;font-size:13px;}
+  button{padding:11px;font-family:'Orbitron';font-weight:700;font-size:12px;letter-spacing:2px;
+    border:1px solid var(--cyan);background:#0d2247;color:var(--cyan);margin-bottom:9px;transition:all .2s;}
+  button:hover{background:#16407a;box-shadow:0 0 18px rgba(40,224,255,.55);}
+  #btnReset{border-color:var(--bad);color:var(--bad);background:#2a0d12;}
+  #btnReset:hover{background:#4a121c;box-shadow:0 0 18px rgba(255,59,59,.5);}
+  /* center readout */
+  #center{top:43%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;width:660px;}
+  #cls{font-family:'Orbitron';font-weight:900;font-size:92px;letter-spacing:6px;line-height:1;text-transform:uppercase;
+    text-shadow:0 0 50px currentColor,0 0 95px currentColor;transition:color .3s;}
+  #conf{font-size:18px;letter-spacing:8px;color:#bcd2ff;margin-top:12px;text-shadow:0 0 10px #000;}
+  #verdict{font-family:'Orbitron';font-weight:700;font-size:27px;letter-spacing:5px;margin-top:18px;text-shadow:0 0 26px currentColor;}
+  /* signal signature mini-charts */
+  .sigc{width:100%;height:54px;border-radius:8px;border:1px solid var(--edge);background:#070d1c;display:block;}
+  /* mini ppi */
+  #ppi{width:100%;height:auto;margin-top:8px;display:block;}
+  /* analysis modal */
+  #modal{position:fixed;inset:0;z-index:20;background:rgba(3,6,14,.72);backdrop-filter:blur(6px);
+    display:none;align-items:center;justify-content:center;}
+  #card{width:780px;max-width:94vw;max-height:90vh;overflow-y:auto;scrollbar-width:thin;
+    background:rgba(8,16,34,.96);border:1px solid var(--cyan);border-radius:18px;padding:22px 26px;
+    box-shadow:0 0 60px rgba(40,224,255,.3);}
+  #card h2{font-family:'Orbitron';font-size:20px;letter-spacing:3px;color:var(--cyan);margin-bottom:4px;}
+  #card .sub{font-size:12px;color:var(--sub);letter-spacing:1px;margin-bottom:16px;}
+  .agrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .sec{background:#0b1430;border:1px solid var(--edge);border-radius:12px;padding:12px 14px;}
+  .sec h4{font-family:'Orbitron';font-size:11px;letter-spacing:2px;color:var(--cyan);margin-bottom:9px;text-transform:uppercase;}
+  .kv{display:flex;justify-content:space-between;font-size:12.5px;margin:5px 0;}
+  .kv .k{color:var(--sub);} .kv .v{font-weight:700;}
+  .closex{float:right;cursor:pointer;color:var(--bad);font-size:20px;font-weight:700;margin-top:-4px;}
+  .acanvas{width:100%;border-radius:8px;border:1px solid var(--edge);background:#070d1c;image-rendering:pixelated;}
+  .verdict-pill{display:inline-block;padding:3px 12px;border-radius:20px;font-weight:800;font-size:12px;letter-spacing:1px;}
+  /* RD map */
+  #rdwrap{margin-top:4px;}
+  #rdmap{width:100%;height:84px;border-radius:9px;border:1px solid var(--edge);image-rendering:pixelated;background:#070d1c;}
+  .cap{font-size:10px;letter-spacing:2px;color:var(--sub);margin-bottom:5px;}
+  /* pipeline */
+  #pipe{bottom:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;z-index:3;}
+  .stg{width:150px;height:96px;border-radius:13px;border:1.5px solid var(--edge);background:rgba(9,17,36,.8);
+    backdrop-filter:blur(10px);text-align:center;padding:10px 6px;transition:all .3s;opacity:.55;}
+  .stg.active{opacity:1;border-color:var(--cyan);box-shadow:0 0 24px rgba(40,224,255,.6);transform:translateY(-6px);}
+  .stg.done{opacity:1;border-color:var(--ok);}
+  .stg.skip{opacity:.4;border-color:#3a3a44;}
+  .stg.threat{opacity:1;border-color:var(--bad);box-shadow:0 0 26px rgba(255,59,59,.6);background:rgba(40,8,12,.85);}
+  .stg .ic{font-size:22px;} .stg .t{font-family:'Orbitron';font-size:10px;letter-spacing:1px;color:var(--cyan);margin-top:4px;font-weight:700;}
+  .stg .d{font-size:10px;color:var(--sub);margin-top:5px;min-height:12px;}
+  .arr{color:#2a4a7a;font-size:18px;}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<div id="hdr" class="ui">
+  <div class="title">◎ RL GATEKEEPER · RADAR INSPECTOR · 77 GHz</div>
+  <div class="chips">
+    <div class="chip on">ML<b>ONLINE</b></div>
+    <div class="chip on">GATEKEEPER<b>ONLINE</b></div>
+    <div class="chip zen">77 GHz<b>ZENODO</b></div>
+  </div>
+</div>
+<div id="dots" class="ui"></div>
+
+<!-- LEFT -->
+<div id="left" class="ui">
+  <div class="panel">
+    <h3>System Metrics</h3>
+    <div class="row"><span class="k">Signals Processed</span><span class="v" id="m-total" style="color:var(--cyan)">0</span></div>
+    <div class="row"><span class="k">Forwarded → ML</span><span class="v" id="m-fwd" style="color:var(--aircraft)">0</span></div>
+    <div class="row"><span class="k">Discarded ✓</span><span class="v" id="m-disc" style="color:var(--ok)">0</span></div>
+    <div class="row"><span class="k">Missed Threats</span><span class="v" id="m-miss" style="color:var(--bad)">0</span></div>
+    <div class="row"><span class="k">Cumulative Reward</span><span class="v" id="m-rew" style="color:var(--cyan)">+0.0</span></div>
+  </div>
+  <div class="panel">
+    <h3>Efficiency</h3>
+    <div class="barlab"><span>ML Workload Saved</span><span id="e-save">0%</span></div><div class="bar"><i id="b-save" style="background:var(--ok)"></i></div>
+    <div class="barlab"><span>Threat Recall</span><span id="e-recall">—</span></div><div class="bar"><i id="b-recall" style="background:var(--warn)"></i></div>
+    <div class="barlab"><span>ML Accuracy (fwd)</span><span id="e-acc">—</span></div><div class="bar"><i id="b-acc" style="background:var(--clutter)"></i></div>
+  </div>
+  <div class="panel">
+    <h3>Gatekeeper Q-Values</h3>
+    <div class="barlab"><span>DISCARD</span><span id="q-d">0.00</span></div><div class="bar"><i id="b-qd" style="background:var(--ok)"></i></div>
+    <div class="barlab"><span>FORWARD</span><span id="q-f">0.00</span></div><div class="bar"><i id="b-qf" style="background:var(--cyan)"></i></div>
+    <select id="target"></select>
+    <button id="btnStep">⚡ STEP SIGNAL</button>
+    <button id="btnAuto">▶ AUTO RUN</button>
+    <button id="btnAnalyze" style="border-color:var(--warn);color:var(--warn);background:#2a1c08">🔬 FULL ANALYSIS</button>
+    <button id="btnReset">✕ RESET</button>
+  </div>
+</div>
+
+<!-- ANALYSIS MODAL -->
+<div id="modal" class="ui"><div id="card"></div></div>
+
+<!-- RIGHT -->
+<div id="right" class="ui">
+  <div class="panel">
+    <h3>ML Classifier Output</h3>
+    <div id="mlbars"></div>
+  </div>
+  <div class="panel">
+    <h3>Signal Signatures</h3>
+    <div class="cap">Doppler profile</div>
+    <canvas id="sigDop" class="sigc" width="270" height="54"></canvas>
+    <div class="cap" style="margin-top:7px">Range profile (envelope)</div>
+    <canvas id="sigRng" class="sigc" width="270" height="54"></canvas>
+  </div>
+  <div class="panel">
+    <h3>Attribution</h3>
+    <div class="barlab"><span>RD Map</span><span id="a-rd">0%</span></div><div class="bar"><i id="b-ard" style="background:#b14cff"></i></div>
+    <div class="barlab"><span>Doppler</span><span id="a-dop">0%</span></div><div class="bar"><i id="b-adop" style="background:var(--cyan)"></i></div>
+    <div class="barlab"><span>Envelope</span><span id="a-env">0%</span></div><div class="bar"><i id="b-aenv" style="background:var(--ok)"></i></div>
+    <canvas id="ppi" width="240" height="200"></canvas>
+  </div>
+  <div class="panel" id="rdpanel">
+    <h3>Range-Doppler Map</h3>
+    <canvas id="rdmap" width="128" height="32"></canvas>
+  </div>
+</div>
+
+<!-- CENTER readout -->
+<div id="center" class="ui">
+  <div id="cls" style="color:var(--sub)">STANDBY</div>
+  <div id="conf"></div>
+  <div id="verdict"></div>
+</div>
+
+<!-- PIPELINE -->
+<div id="pipe" class="ui"></div>
+
+<script>const DATA = /*__DATA__*/null;</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+const meta=DATA.meta, dets=DATA.detections, THREATSET=new Set(meta.threat);
+const CSS={Drone:'#ff3b3b',Aircraft:'#ff9f1c',Bird:'#2ee6a6',Clutter:'#3da5ff',Noise:'#8892a6'};
+const CLR={Drone:0xff3b3b,Aircraft:0xff9f1c,Bird:0x2ee6a6,Clutter:0x3da5ff,Noise:0x8892a6};
+const $=id=>document.getElementById(id);
+
+/* ===== THREE hero scene: radar dish + Tron grid ===== */
+const scene=new THREE.Scene(); scene.fog=new THREE.FogExp2(0x05070f,0.0022);
+const camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,3000);
+const camFrom=new THREE.Vector3(0,560,780), camTo=new THREE.Vector3(0,60,210);
+camera.position.copy(camFrom); camera.lookAt(0,46,0);
+let introT=0; const introDur=3.0, easeOut=x=>1-Math.pow(1-x,3);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+$('scene').appendChild(renderer.domElement);
+const composer=new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene,camera));
+const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.0,0.55,0.12);
+composer.addPass(bloom);
+scene.add(new THREE.AmbientLight(0x3a5a88,1.1));
+const pl=new THREE.PointLight(0x66ccff,1.6,2000); pl.position.set(80,160,220); scene.add(pl);
+
+/* Tron grid floor */
+const grid=new THREE.GridHelper(1200,120,0x1f6fb0,0x0d2746);
+grid.position.y=0; scene.add(grid);
+/* starfield */
+(function(){const n=1200,g=new THREE.BufferGeometry(),p=new Float32Array(n*3);
+ for(let i=0;i<n;i++){p[i*3]=(Math.random()-.5)*2400;p[i*3+1]=Math.random()*800;p[i*3+2]=(Math.random()-.5)*2400-300;}
+ g.setAttribute('position',new THREE.BufferAttribute(p,3));
+ scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x33557a,size:1.6,transparent:true,opacity:.7})));})();
+
+/* base glow ring */
+const base=new THREE.Mesh(new THREE.CylinderGeometry(16,20,4,40),
+  new THREE.MeshStandardMaterial({color:0x0a1a30,emissive:0x1fa0ff,emissiveIntensity:1.2,metalness:.6,roughness:.4}));
+base.position.y=2; scene.add(base);
+/* post */
+const post=new THREE.Mesh(new THREE.CylinderGeometry(3.4,4.4,52,24),
+  new THREE.MeshStandardMaterial({color:0x16223e,metalness:.7,roughness:.35,emissive:0x081428}));
+post.position.y=28; scene.add(post);
+/* dish assembly: parabolic satellite dish (scan group -> tilt group) */
+const radar=new THREE.Group(); radar.position.y=58; scene.add(radar);        // scans around Y
+const tilt=new THREE.Group(); tilt.rotation.x=-Math.PI*0.20; radar.add(tilt); // fixed up-tilt
+const R=36, depth=12, N=22, prof=[];
+for(let i=0;i<=N;i++){const r=R*i/N; prof.push(new THREE.Vector2(r, depth*(i/N)*(i/N)));}
+const dishGeo=new THREE.LatheGeometry(prof,60);
+const dish=new THREE.Mesh(dishGeo,new THREE.MeshStandardMaterial({
+  color:0x0b1b33,emissive:0x1488cc,emissiveIntensity:.45,metalness:.85,roughness:.25,side:THREE.DoubleSide}));
+tilt.add(dish);
+const wire=new THREE.Mesh(dishGeo,new THREE.MeshBasicMaterial({color:0x39c6ff,wireframe:true,transparent:true,opacity:.16}));
+wire.scale.setScalar(1.012); tilt.add(wire);
+const rim=new THREE.Mesh(new THREE.TorusGeometry(R,0.6,8,72),new THREE.MeshBasicMaterial({color:0x28e0ff}));
+rim.position.y=depth; rim.rotation.x=Math.PI/2; tilt.add(rim);
+const focusY=depth+24;
+const feed=new THREE.Mesh(new THREE.SphereGeometry(2.4,18,18),
+  new THREE.MeshStandardMaterial({color:0x9fe8ff,emissive:0x39c6ff,emissiveIntensity:3}));
+feed.position.set(0,focusY,0); tilt.add(feed);
+const horn=new THREE.Mesh(new THREE.ConeGeometry(2.4,6,18),
+  new THREE.MeshStandardMaterial({color:0x16324f,emissive:0x1577aa,emissiveIntensity:1.2,metalness:.7}));
+horn.position.set(0,focusY-4.5,0); tilt.add(horn);
+const strutMat=new THREE.MeshStandardMaterial({color:0x2a445f,metalness:.6,roughness:.4,emissive:0x0a1830});
+for(let k=0;k<3;k++){const a=k*2*Math.PI/3,
+  sp=new THREE.Vector3(R*0.8*Math.cos(a),depth*0.64,R*0.8*Math.sin(a)), ep=new THREE.Vector3(0,focusY,0),
+  len=sp.distanceTo(ep), strut=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,len,8),strutMat);
+  strut.position.copy(sp.clone().add(ep).multiplyScalar(.5));
+  strut.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),ep.clone().sub(sp).normalize());
+  tilt.add(strut);}
+/* beam cone (pulses on detection) */
+const beam=new THREE.Mesh(new THREE.ConeGeometry(22,150,40,1,true),
+  new THREE.MeshBasicMaterial({color:0x28e0ff,transparent:true,opacity:0.0,side:THREE.DoubleSide,
+    blending:THREE.AdditiveBlending,depthWrite:false}));
+beam.position.set(0,focusY+70,0); tilt.add(beam);
+
+/* ===== build UI ===== */
+// target dropdown
+const tgt=$('target'); ['🎲 Random',...meta.present].forEach(o=>{const e=document.createElement('option');e.value=o.replace('🎲 ','');e.textContent=o;tgt.appendChild(e);});
+// step dots
+const DOTS=10; for(let i=0;i<DOTS;i++){const d=document.createElement('div');d.className='dot';$('dots').appendChild(d);}
+// ml bars
+meta.classes.forEach(c=>{const w=document.createElement('div');
+  w.innerHTML=`<div class="barlab" style="margin-top:6px"><span style="color:${CSS[c]}">${c}</span><span id="ml-${c}">0%</span></div><div class="bar"><i id="bml-${c}" style="background:${CSS[c]}"></i></div>`;
+  $('mlbars').appendChild(w);});
+// pipeline stages
+const STG=[['📡','77 GHz Source'],['⚡','Preprocess'],['🛰️','RL Gatekeeper'],['🧠','ML Classifier'],['🎯','Decision']];
+STG.forEach((s,i)=>{const st=document.createElement('div');st.className='stg';st.id='stg'+i;
+  st.innerHTML=`<div class="ic">${s[0]}</div><div class="t">${s[1]}</div><div class="d" id="sd${i}">—</div>`;
+  $('pipe').appendChild(st); if(i<4){const a=document.createElement('div');a.className='arr';a.textContent='▸';$('pipe').appendChild(a);}});
+
+// plasma colormap + RD draw
+function plasma(t){t=Math.max(0,Math.min(1,t));const s=[[13,8,135],[126,3,168],[204,71,120],[248,149,64],[240,249,33]];
+  const x=t*4,i=Math.floor(x),f=x-i,a=s[i],b=s[Math.min(i+1,4)];return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];}
+const rdc=$('rdmap'),rx=rdc.getContext('2d');
+function drawRD(rd){const [H,W]=meta.rd_shape;rdc.width=W;rdc.height=H;const im=rx.createImageData(W,H);
+  for(let i=0;i<W*H;i++){const[r,g,b]=plasma(rd[i]/255);im.data[i*4]=r;im.data[i*4+1]=g;im.data[i*4+2]=b;im.data[i*4+3]=255;}rx.putImageData(im,0,0);}
+function drawLine(cv,arr,color){const c=cv.getContext('2d'),w=cv.width,h=cv.height;c.clearRect(0,0,w,h);
+  c.strokeStyle='#13294e';c.beginPath();c.moveTo(0,h-1);c.lineTo(w,h-1);c.stroke();
+  const mx=Math.max(...arr,1e-6);c.lineWidth=2;c.strokeStyle=color;c.beginPath();
+  arr.forEach((v,i)=>{const x=i/(arr.length-1)*w,y=h-(v/mx)*(h-6)-3;i?c.lineTo(x,y):c.moveTo(x,y);});c.stroke();
+  c.lineTo(w,h);c.lineTo(0,h);c.closePath();c.globalAlpha=.16;c.fillStyle=color;c.fill();c.globalAlpha=1;}
+
+/* ===== state + metrics ===== */
+let acc={total:0,fwd:0,disc:0,miss:0,rew:0,thrTrue:0,thrFwd:0,accN:0,accOk:0},histIdx=0,auto=null,cursor=0,lastDet=null;
+function setbar(id,pct){$(id).style.width=Math.max(0,Math.min(100,pct))+'%';}
+function squash(x){return 1/(1+Math.exp(-x));}
+
+function pickDetection(){
+  const sel=tgt.value;
+  let pool=dets;
+  if(sel!=='Random') pool=dets.filter(d=>d.true===sel);
+  if(!pool.length) pool=dets;
+  return pool[(cursor++)%pool.length];
+}
+
+let timer=null;
+function step(){
+  const d=pickDetection(); lastDet=d;
+  const cls=d.forward?d.pred:d.true, col=CSS[d.forward?d.pred:d.true];
+  // reset stages
+  for(let i=0;i<5;i++){$('stg'+i).className='stg';$('sd'+i).textContent='—';}
+  drawRD(d.rd);
+  drawLine($('sigDop'),d.dop,'#28e0ff'); drawLine($('sigRng'),d.rng_prof,'#2ee6a6');
+  // attribution proxy (data-derived feature emphasis)
+  const dop=d.dop, rp=d.rng_prof;
+  const dopSpread=Math.sqrt(dop.reduce((a,v,i)=>a+v*(i-dop.length/2)**2,0)/dop.reduce((a,v)=>a+v,1e-6));
+  const rdE=d.rd.reduce((a,v)=>a+v,0)/d.rd.length/255;
+  const envPk=Math.max(...rp);
+  let A=[rdE,dopSpread/dop.length,envPk]; const sA=A.reduce((a,b)=>a+b,1e-6); A=A.map(x=>x/sA);
+  // center standby
+  $('cls').textContent='SCANNING…'; $('cls').style.color='var(--sub)'; $('conf').textContent=''; $('verdict').textContent='';
+
+  const steps=[
+    ()=>{stg(0,'active');$('sd0').textContent=`${d.true} · ${d.range}m`;},
+    ()=>{stg(0,'done');stg(1,'active');$('sd1').textContent=`FFT → RD[${meta.rd_shape[0]}×${meta.rd_shape[1]}]`;
+         setbar('b-ard',A[0]*100);setbar('b-adop',A[1]*100);setbar('b-aenv',A[2]*100);
+         $('a-rd').textContent=(A[0]*100|0)+'%';$('a-dop').textContent=(A[1]*100|0)+'%';$('a-env').textContent=(A[2]*100|0)+'%';},
+    ()=>{stg(1,'done');stg(2,'active');$('sd2').textContent=d.forward?'FORWARD':'DISCARD';
+         const qd=squash(d.q[0]),qf=squash(d.q[1]);$('q-d').textContent=d.q[0].toFixed(2);$('q-f').textContent=d.q[1].toFixed(2);
+         setbar('b-qd',qd*100);setbar('b-qf',qf*100);},
+    ()=>{stg(2,'done');
+         if(d.forward){stg(3,'active');$('sd3').textContent=`${d.pred} ${(d.conf*100|0)}%`;
+           meta.classes.forEach((c,i)=>{setbar('bml-'+c,d.probs[i]*100);$('ml-'+c).textContent=(d.probs[i]*100|0)+'%';});
+           $('cls').textContent=d.pred;$('cls').style.color=col;
+           $('conf').textContent='CONFIDENCE '+(d.conf*100).toFixed(1)+'%';}
+         else{stg(3,'skip');$('sd3').textContent='ML SKIPPED ✓';
+           meta.classes.forEach(c=>{setbar('bml-'+c,0);$('ml-'+c).textContent='—';});
+           $('cls').textContent='DISCARDED';$('cls').style.color='var(--ok)';$('conf').textContent='ML INFERENCE SKIPPED';}},
+    ()=>{decide(d,col);bump(d);}
+  ];
+  let i=0;(function tick(){steps[i++]();if(i<steps.length)timer=setTimeout(tick,300);})();
+}
+function stg(i,c){$('stg'+i).className='stg '+c;}
+function decide(d,col){
+  const v=$('verdict');
+  if(d.forward&&d.threat){stg(4,'threat');v.textContent='⚠ THREAT DETECTED';v.style.color='var(--bad)';flashRadar();}
+  else if(d.forward){stg(4,'done');v.textContent='✓ INSPECTED';v.style.color='var(--clutter)';}
+  else if(THREATSET.has(d.true)){stg(4,'threat');v.textContent='🚨 MISSED THREAT';v.style.color='var(--bad)';$('cls').textContent='MISSED';$('cls').style.color='var(--bad)';flashRadar();}
+  else{stg(4,'done');v.textContent='✓ CLEAR';v.style.color='var(--ok)';}
+  $('sd4').textContent=`reward ${d.reward>=0?'+':''}${d.reward}`;
+}
+function bump(d){acc.total++;
+  if(d.forward){acc.fwd++; if(d.probs){acc.accN++; if(d.pred===d.true)acc.accOk++;}} else acc.disc++;
+  if(THREATSET.has(d.true)){acc.thrTrue++; if(d.forward)acc.thrFwd++; else acc.miss++;}
+  acc.rew+=d.reward;
+  $('m-total').textContent=acc.total;$('m-fwd').textContent=acc.fwd;$('m-disc').textContent=acc.disc;
+  $('m-miss').textContent=acc.miss;$('m-rew').textContent=(acc.rew>=0?'+':'')+acc.rew.toFixed(1);
+  const save=acc.total?Math.round(acc.disc/acc.total*100):0;$('e-save').textContent=save+'%';setbar('b-save',save);
+  const rec=acc.thrTrue?Math.round(acc.thrFwd/acc.thrTrue*100):100;$('e-recall').textContent=acc.thrTrue?rec+'%':'—';setbar('b-recall',rec);
+  const ac=acc.accN?Math.round(acc.accOk/acc.accN*100):100;$('e-acc').textContent=acc.accN?ac+'%':'—';setbar('b-acc',ac);
+  // history dots + radar blip
+  const dot=$('dots').children[histIdx%DOTS];histIdx++;
+  dot.style.background=d.forward?CSS[d.pred]:'#566e96';dot.style.boxShadow=`0 0 8px ${d.forward?CSS[d.pred]:'#566e96'}`;
+  addBlip(d);
+}
+let flash=0; function flashRadar(){flash=1;}
+
+/* ===== full per-signal analysis modal ===== */
+function row(k,v,c){return `<div class="kv"><span class="k">${k}</span><span class="v"${c?` style="color:${c}"`:''}>${v}</span></div>`;}
+function openAnalysis(){
+  const d=lastDet; if(!d){return;}
+  if(auto){clearInterval(auto);auto=null;$('btnAuto').textContent='▶ AUTO RUN';$('btnAuto').style.color='var(--cyan)';}
+  const cls=d.forward?d.pred:d.true, col=CSS[cls]||'#8892a6';
+  const correct=d.forward?(d.ml_correct?'<span style="color:var(--ok)">✓ CORRECT</span>':'<span style="color:var(--bad)">✗ WRONG</span>'):'—';
+  const verd=d.forward&&d.threat?['⚠ THREAT DETECTED','var(--bad)']
+    :d.forward?['INSPECTED','var(--clutter)']
+    :THREATSET.has(d.true)?['🚨 MISSED THREAT','var(--bad)']:['✓ CLEAR — ML SKIPPED','var(--ok)'];
+  const probRows=d.forward
+    ? meta.classes.map((c,i)=>row(c,(d.probs[i]*100).toFixed(1)+'%',CSS[c])).join('')
+    : '<div style="font-size:11.5px;color:var(--ok);line-height:1.5">ML inference was skipped — the gatekeeper discarded this signal from the feature tensor alone, saving a full classifier pass.</div>';
+  $('card').innerHTML=`
+    <span class="closex" id="mclose">✕</span>
+    <h2>SIGNAL ANALYSIS · CONTACT #${d.id}</h2>
+    <div class="sub">source: ${d.source} &nbsp;·&nbsp; range ${d.range} m &nbsp;·&nbsp; azimuth ${d.az}° &nbsp;·&nbsp;
+      <span class="verdict-pill" style="background:${verd[1]}22;color:${verd[1]};border:1px solid ${verd[1]}">${verd[0]}</span></div>
+    <div class="agrid">
+      <div class="sec"><h4>Classification</h4>
+        ${row('Ground truth',d.true,CSS[d.true])}
+        ${row('ML prediction',d.forward?d.pred:'— (skipped)',col)}
+        ${row('Correct?',correct)}
+        ${row('Confidence',d.forward?(d.conf*100).toFixed(1)+'%':'—')}
+        ${row('Entropy (norm.)',d.entropy)}</div>
+      <div class="sec"><h4>Gatekeeper Decision</h4>
+        ${row('Action',d.forward?'FORWARD':'DISCARD',d.forward?'var(--cyan)':'var(--ok)')}
+        ${row('Q · discard',d.q[0])}
+        ${row('Q · forward',d.q[1])}
+        ${row('Decision margin',(d.q[1]-d.q[0]).toFixed(3))}
+        ${row('Threat class?',THREATSET.has(cls)?'YES':'no')}</div>
+      <div class="sec"><h4>Value of Information</h4>
+        ${row('Class value v[y]',d.class_value)}
+        ${row('Certainty',d.certainty)}
+        ${row('ML utility U(X)',d.u_ml)}
+        ${row('Compute cost κ',meta.kappa)}
+        ${row('Surplus  U−κ',d.surplus,d.surplus>=0?'var(--ok)':'var(--bad)')}
+        ${row('Reward',(d.reward>=0?'+':'')+d.reward,d.reward>=0?'var(--ok)':'var(--bad)')}</div>
+      <div class="sec"><h4>ML Class Probabilities</h4>${probRows}</div>
+      <div class="sec" style="grid-column:1/3"><h4>Range-Doppler Map</h4>
+        <canvas id="aRD" class="acanvas" style="height:130px"></canvas></div>
+      <div class="sec"><h4>Doppler Profile</h4><canvas id="aDop" class="acanvas" width="320" height="92"></canvas></div>
+      <div class="sec"><h4>Range Profile (envelope)</h4><canvas id="aRng" class="acanvas" width="320" height="92"></canvas></div>
+    </div>`;
+  const aRD=$('aRD'),[H,W]=meta.rd_shape; aRD.width=W;aRD.height=H;
+  const ax=aRD.getContext('2d'),im=ax.createImageData(W,H);
+  for(let i=0;i<W*H;i++){const[r,g,b]=plasma(d.rd[i]/255);im.data[i*4]=r;im.data[i*4+1]=g;im.data[i*4+2]=b;im.data[i*4+3]=255;}
+  ax.putImageData(im,0,0);
+  drawLine($('aDop'),d.dop,'#28e0ff'); drawLine($('aRng'),d.rng_prof,'#2ee6a6');
+  $('mclose').onclick=closeAnalysis;
+  $('modal').style.display='flex';
+}
+function closeAnalysis(){$('modal').style.display='none';}
+
+/* full-circle PPI scope with live detection blips */
+const ppi=$('ppi'),pc=ppi.getContext('2d'); let pAng=0,pPrev=0; const blips=[];
+const PR=130;  // max range mapped to the scope edge (m)
+function drawPPI(){const w=ppi.width,h=ppi.height,cx=w/2,cy=h/2,R=Math.min(w,h)/2-6;
+  pPrev=pAng; pAng=(pAng+0.03)%(2*Math.PI);
+  // ping any blip the sweep just crossed
+  blips.forEach(b=>{const lo=pPrev,hi=pAng;const c=lo<=hi?(b.ang>=lo&&b.ang<hi):(b.ang>=lo||b.ang<hi);if(c)b.ping=1;});
+  pc.clearRect(0,0,w,h);
+  // range rings + crosshair (full circle)
+  pc.strokeStyle='#173a66';pc.lineWidth=1;
+  for(let k=1;k<=3;k++){pc.beginPath();pc.arc(cx,cy,R*k/3,0,2*Math.PI);pc.stroke();}
+  pc.beginPath();pc.moveTo(cx-R,cy);pc.lineTo(cx+R,cy);pc.moveTo(cx,cy-R);pc.lineTo(cx,cy+R);pc.stroke();
+  // sweep comet trail
+  for(let i=0;i<26;i++){const a=pAng-i*0.045;pc.beginPath();pc.moveTo(cx,cy);
+    pc.arc(cx,cy,R,a-0.05,a);pc.closePath();pc.fillStyle=`rgba(40,224,255,${0.14*(1-i/26)})`;pc.fill();}
+  // sweep line
+  pc.strokeStyle='rgba(170,244,255,.9)';pc.lineWidth=1.6;pc.beginPath();
+  pc.moveTo(cx,cy);pc.lineTo(cx+R*Math.cos(pAng),cy+R*Math.sin(pAng));pc.stroke();
+  // detection blips
+  blips.forEach(b=>{const x=cx+b.r*R*Math.cos(b.ang),y=cy+b.r*R*Math.sin(b.ang);
+    if(b.ping>0){pc.beginPath();pc.arc(x,y,4+7*b.ping,0,2*Math.PI);pc.strokeStyle=b.color;
+      pc.globalAlpha=b.ping;pc.lineWidth=1.5;pc.stroke();pc.globalAlpha=1;b.ping=Math.max(0,b.ping-0.018);}
+    pc.beginPath();pc.arc(x,y,b.threat?3.4:2.4,0,2*Math.PI);pc.fillStyle=b.color;
+    pc.shadowColor=b.color;pc.shadowBlur=b.threat?9:5;pc.fill();pc.shadowBlur=0;});}
+function addBlip(d){blips.push({ang:((d.az%360)+360)%360*Math.PI/180,r:Math.min(d.range/PR,1),
+  color:d.forward?CSS[d.pred]:'#5a6e96',threat:d.threat,ping:1}); if(blips.length>48)blips.shift();}
+
+/* controls */
+$('btnAnalyze').onclick=openAnalysis;
+$('modal').onclick=e=>{if(e.target.id==='modal')closeAnalysis();};
+addEventListener('keydown',e=>{if(e.key==='Escape')closeAnalysis();});
+$('btnStep').onclick=()=>{if(timer)clearTimeout(timer);step();};
+$('btnAuto').onclick=e=>{if(auto){clearInterval(auto);auto=null;e.target.textContent='▶ AUTO RUN';e.target.style.color='var(--cyan)';}
+  else{step();auto=setInterval(()=>{if(timer)clearTimeout(timer);step();},4200);e.target.textContent='⏸ STOP AUTO';e.target.style.color='var(--warn)';}};
+$('btnReset').onclick=()=>{acc={total:0,fwd:0,disc:0,miss:0,rew:0,thrTrue:0,thrFwd:0,accN:0,accOk:0};cursor=0;histIdx=0;
+  ['m-total','m-fwd','m-disc','m-miss'].forEach(i=>$(i).textContent='0');$('m-rew').textContent='+0.0';
+  ['b-save','b-recall','b-acc','b-qd','b-qf'].forEach(i=>setbar(i,0));
+  meta.classes.forEach(c=>{setbar('bml-'+c,0);$('ml-'+c).textContent='0%';});
+  [...$('dots').children].forEach(d=>{d.style.background='#1a2c50';d.style.boxShadow='none';});
+  blips.length=0;
+  $('cls').textContent='STANDBY';$('cls').style.color='var(--sub)';$('conf').textContent='';$('verdict').textContent='';
+  for(let i=0;i<5;i++)$('stg'+i).className='stg';};
+
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);});
+
+/* animation */
+const clock=new THREE.Clock();
+function loop(){requestAnimationFrame(loop);const dt=clock.getDelta(),t=clock.elapsedTime;
+  if(introT<introDur){introT+=dt;camera.position.lerpVectors(camFrom,camTo,easeOut(Math.min(introT/introDur,1)));camera.lookAt(0,46,0);}
+  radar.rotation.y+=0.3*dt;
+  feed.material.emissiveIntensity=2.4+1.2*Math.sin(t*4);
+  if(flash>0){flash=Math.max(0,flash-dt*1.2);beam.material.opacity=0.28*flash;
+    dish.material.emissive.setHex(0xff3030);dish.material.emissiveIntensity=.5+flash;}
+  else{dish.material.emissive.setHex(0x1488cc);dish.material.emissiveIntensity=.5;beam.material.opacity=0;}
+  base.material.emissiveIntensity=1.0+0.4*Math.sin(t*2.2);
+  drawPPI(); composer.render();}
+loop();
+
+/* auto-start the live demo once the camera fly-in settles */
+setTimeout(()=>$('btnAuto').click(), 3300);
+</script>
+</body>
+</html>

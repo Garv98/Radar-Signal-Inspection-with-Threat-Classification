@@ -141,3 +141,115 @@ hardware:
   device: "auto"  # Options: auto, cuda, cpu
   num_workers: 0
   pin_memory: false
+
+# =============================================================================
+# RL Gatekeeper  (computational gatekeeper that decides DISCARD vs FORWARD)
+# =============================================================================
+# Data flow:
+#   Raw IQ -> preprocessing -> feature tensor X = {rd_map, doppler, env}
+#   X -> RL gatekeeper -> action {0=DISCARD, 1=FORWARD}
+#        FORWARD -> X -> ML classifier (the expensive deep inspection)
+#        DISCARD -> stop (ML inference skipped -> compute saved)
+# The RL agent consumes the EXACT same tensor X that the ML model consumes;
+# it never sees the ML output (that would defeat the compute-savings goal).
+rl:
+  # ── Data source for training the gatekeeper ──────────────────────────────
+  # The gatekeeper trains on the same feature distribution the ML model sees.
+  data_source: "mixed"        # Options: zenodo (real 77GHz), synthetic, mixed
+  synthetic_per_class: 600    # used when data_source includes synthetic
+  zenodo_max_segments: null   # null = use all available real segments
+  pool_seed: 42
+
+  # ── Feature encoder (lightweight, must be far cheaper than the ML model) ──
+  encoder:
+    conv_channels: [8, 16]    # tiny CNN over the RD map (vs [32,64,128] in ML)
+    kernel_size: 3
+    pool_size: 2
+    adaptive_pool: [2, 2]
+    side_hidden: 16           # MLP width for doppler + env side features
+    latent_dim: 64            # shared latent fed to the dueling head
+
+  # ── Dueling DQN head ─────────────────────────────────────────────────────
+  head:
+    hidden_dims: [128, 64]
+    stream_hidden: 64
+
+  # ── DQN agent hyperparameters ────────────────────────────────────────────
+  agent:
+    lr: 0.0005
+    gamma: 0.0                # myopic: each signal is an i.i.d. bandit decision
+    eps_start: 1.0
+    eps_end: 0.02
+    eps_decay: 0.997
+    batch_size: 64
+    target_update: 250
+    tau: 1.0
+    grad_clip: 10.0
+    buffer_capacity: 20000
+    per_alpha: 0.6
+    per_beta_start: 0.4
+    per_beta_frames: 80000
+
+  # ── Curriculum (teacher = ML classifier / oracle value-of-information) ────
+  curriculum:
+    warmup_episodes: 40       # Phase 1: oracle teacher demonstrations
+    guided_episodes: 80       # Phase 2: teacher ratio annealed 0.9 -> 0
+    rl_episodes: 250          # Phase 3: pure epsilon-greedy RL
+    steps_per_episode: 400
+    teacher_ratio_start: 0.9
+    eval_episodes: 20
+    seed: 42
+
+  # ── Model selection (safety) ─────────────────────────────────────────────
+  # Best checkpoint = highest eval reward AMONG policies whose true threat
+  # recall >= min_threat_recall (so compute savings never come at the cost of
+  # missed threats). Falls back to the highest-recall policy if none qualify.
+  selection:
+    min_threat_recall: 0.90
+
+  # ── Paths ────────────────────────────────────────────────────────────────
+  # The teacher must match the data domain so its confidence/correctness (which
+  # score the reward) are reliable: synthetic data -> synthetic-trained model,
+  # real 77GHz data -> Zenodo-fine-tuned model.
+  ml_model_by_source:
+    synthetic: "outputs/models/best_model.pt"
+    zenodo: "outputs/models/best_model_zenodo.pt"
+    mixed: "outputs/models/best_model_zenodo.pt"
+  ml_model_path: "outputs/models/best_model_zenodo.pt"   # fallback / --ml-model override
+  save_path: "outputs/models/gatekeeper_dqn.pt"
+  registry_name: "radar_rl_gatekeeper"
+
+# =============================================================================
+# Reward function  (Value-of-Information: Utility = Detection - Compute Cost)
+# =============================================================================
+# Let  U_surplus = U_ml(X) - kappa   (net value of inspecting this signal):
+#   Reward(FORWARD) = U_surplus - eta * max(0, rho - rho*)
+#   Reward(DISCARD) = - beta * max(0, U_surplus)
+# where
+#   U_ml(X)   = class_value[y] * (2*correct - 1) * certainty
+#   certainty = alpha * confidence + (1 - alpha) * (1 - normalized_entropy)
+# This yields the clean value-of-information rule "forward iff U_ml >= kappa",
+# while beta makes discarding a *worth-forwarding* signal costly in proportion
+# to its surplus value (the false-negative asymmetry) WITHOUT lowering the bar.
+# class_value[y] is threat-centric (operational stakes) modulated by the data
+# frequency; every coefficient lives here, none are hardcoded in code.
+reward:
+  compute_cost: 0.35          # kappa: cost of one ML inference (utility units)
+  miss_aversion: 3.0          # beta: penalty multiplier for discarding a worth-forwarding signal
+  certainty_blend: 0.5        # alpha: confidence vs (1 - entropy) blend
+  value_gamma: 0.5            # exponent on inverse class frequency (within-group modulation)
+  value_clip: [0.1, 3.0]      # clamp derived class values to a sane range
+  threat_classes: ["Drone", "Aircraft"]
+  threat_value: 1.5           # operational value of a (confirmable) threat detection
+  nonthreat_value: 0.25       # operational value of inspecting a non-threat (< kappa region)
+  forward_budget: null        # rho*: target forward rate; null = derive from data
+  budget_penalty: 1.0         # eta: penalty per unit of over-budget forwarding
+
+# =============================================================================
+# MLOps / Experiment Tracking
+# =============================================================================
+tracking:
+  experiment_name: "radar_rl_gatekeeper"
+  tracking_uri: "outputs/mlruns"
+  use_mlflow: true
+  registry_dir: "outputs/model_registry"

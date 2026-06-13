@@ -1,0 +1,22 @@
+{
+  "n_samples": 1000,
+  "rd_map_mean": {
+    "mean": 0.599984747260809,
+    "std": 0.09763271594927353
+  },
+  "rd_map_std": {
+    "mean": 0.10465225872397423,
+    "std": 0.014695905856463128
+  },
+  "rd_map_peak": {
+    "mean": 1.0,
+    "std": 0.0
+  },
+  "class_distribution": {
+    "Drone": 195,
+    "Aircraft": 189,
+    "Bird": 219,
+    "Clutter": 203,
+    "Noise": 194
+  }
+}
